@@ -11,19 +11,20 @@ K = 32 # numero de portadoras en el bloque de OFDM
 CP = K//4  # longitud del ciclo de bits de cabecera: 25% del bloque
 
 P = 4 # Numero de portadoras piloto en el bloque
-#pilotValue = 3+3j # The known value each pilot transmits
+pilotValue = 3+3j # El valor de las portadoras piloto
 
-allCarriers = np.arange(K)  # indices of all subcarriers ([0, 1, ... K-1])
+allCarriers = np.arange(K)  # Indica la posicion de todas las portadoras
 
-pilotCarriers = allCarriers[::K//P] # Pilots is every (K/P)th carrier.
+pilotCarriers = allCarriers[::K//P] #Indica la posiicion de las portadoras piloto
 
-# For convenience of channel estimation, let's make the last carriers also be a pilot
+# Se asigna la ultima portadora tambien como piloto
 pilotCarriers = np.hstack([pilotCarriers, np.array([allCarriers[-1]])])
 P = P+1
 
-# data carriers are all remaining carriers
+# Las portadoras de datos son las restantes (las que  no son piloto)
 dataCarriers = np.delete(allCarriers, pilotCarriers)
 
+# Se muestra las portadoras piloto como puntos azules y las portadoras de datos como puntos rojos
 print ("allCarriers:   %s" % allCarriers)
 print ("pilotCarriers: %s" % pilotCarriers)
 print ("dataCarriers:  %s" % dataCarriers)
@@ -67,72 +68,67 @@ for b3 in [0, 1]:
 plt.show()
 demapping_table = {v : k for k, v in mapping_table.items()}
 
-channelResponse = np.array([1, 0, 0.3+0.3j])  # the impulse response of the wireless channel
+channelResponse = np.array([1, 0, 0.3+0.3j])  # la respuesta al impulso del canal
 H_exact = np.fft.fft(channelResponse, K)
 plt.plot(allCarriers, abs(H_exact))
 plt.show()
-SNRdb = 25  # signal to noise-ratio in dB at the receiver 
+SNRdb = 25  # SNR (en dB)
 
 bits = np.random.binomial(n=1, p=0.5, size=(payloadBits_per_OFDM, ))
-print ("Bits count: ", len(bits))
+print ("Cantidad de bits: ", len(bits))
 print ("Bits: ", bits)
-print ("Mean of bits (should be around 0.5): ", np.mean(bits))
+print ("Mean of bits (valor cercano a 0.5): ", np.mean(bits))
 
 def SP(bits):
     return bits.reshape((len(dataCarriers), mu))
 bits_SP = SP(bits)
-print ("First 5 bit groups")
+print ("Primeros 5 grupos de bits")
 print (bits_SP[:5,:])
 
 def Mapping(bits):
     return np.array([mapping_table[tuple(b)] for b in bits])
 PSK= Mapping(bits_SP)
-print ("First 5 QAM symbols and bits:")
+print ("Primeras 5 modulaciones PSK:")
 print (bits_SP[:5,:])
 print (PSK[:5])
 
-def OFDM_symbol(QAM_payload):
-    symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
-    symbol[pilotCarriers] = pilotValue  # allocate the pilot subcarriers 
-    symbol[dataCarriers] = QAM_payload  # allocate the pilot subcarriers
+def OFDM_symbol(QAM_payload): #Posicionamiento de simbolos
+    symbol = np.zeros(K, dtype=complex) 
+    symbol[pilotCarriers] = pilotValue  
+    symbol[dataCarriers] = QAM_payload  
     return symbol
 
-def OFDM_symbol(QAM_payload):
-    symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
-    symbol[pilotCarriers] = pilotValue  # allocate the pilot subcarriers 
-    symbol[dataCarriers] = QAM_payload  # allocate the pilot subcarriers
-    return symbol
 
 OFDM_data = OFDM_symbol(PSK)
-print ("Number of OFDM carriers in frequency domain: ", len(OFDM_data))
+print ("Numero de portadoras OFDM carriers en el dominio de la frecuencia: ", len(OFDM_data))
 
 def IDFT(OFDM_data):
     return np.fft.ifft(OFDM_data)
 OFDM_time = IDFT(OFDM_data)
-print ("Number of OFDM samples in time-domain before CP: ", len(OFDM_time))
+print ("Numerro de muestras OFDM samples en el dominio del tiempo antes de CP: ", len(OFDM_time))
 
 def addCP(OFDM_time):
-    cp = OFDM_time[-CP:]               # take the last CP samples ...
-    return np.hstack([cp, OFDM_time])  # ... and add them to the beginning
+    cp = OFDM_time[-CP:]               
+    return np.hstack([cp, OFDM_time]) 
 OFDM_withCP = addCP(OFDM_time)
 print ("Number of OFDM samples in time domain with CP: ", len(OFDM_withCP))
 
 def channel(signal):
     convolved = np.convolve(signal, channelResponse)
     signal_power = np.mean(abs(convolved**2))
-    sigma2 = signal_power * 10**(-SNRdb/10)  # calculate noise power based on signal power and SNR
+    sigma2 = signal_power * 10**(-SNRdb/10)  # Calculo de la potencia de ruido y SNR
     
-    print ("RX Signal power: %.4f. Noise power: %.4f" % (signal_power, sigma2))
+    print ("Potencia señal: %.4f. Potencia ruido: %.4f" % (signal_power, sigma2))
     
-    # Generate complex noise with given variance
+    
     noise = np.sqrt(sigma2/2) * (np.random.randn(*convolved.shape)+1j*np.random.randn(*convolved.shape))
     return convolved + noise
 OFDM_TX = OFDM_withCP
 OFDM_RX = channel(OFDM_TX)
 plt.figure(figsize=(8,2))
-plt.plot(abs(OFDM_TX), label='TX signal')
-plt.plot(abs(OFDM_RX), label='RX signal')
+plt.plot(abs(OFDM_TX), label='señal TX')
+plt.plot(abs(OFDM_RX), label='señal RX')
 plt.legend(fontsize=10)
-plt.xlabel('Time'); plt.ylabel('$|x(t)|$');
+plt.xlabel('Tiempo'); plt.ylabel('$|x(t)|$');
 plt.grid(True);
 plt.show()
